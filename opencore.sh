@@ -16,6 +16,9 @@ source ./src/intel_laptop_plist.sh
 source ./src/amd_desktop_plist.sh
 source ./src/intel_server_plist.sh
 
+GITHUB_TOKEN="addonehere"
+
+
 clear
 
 case $os in
@@ -447,25 +450,23 @@ atiradeonplugins() {
     read -r -p "y/n: " ati_radeon_plugins
     case $ati_radeon_plugins in
         y|Y|Yes|YES|yes )
-            RADEONSENSOR_RELEASE_URL=$(curl -s "$RADEONSENSOR_URL" | jq -r '.assets[] | select(.name | match("RadeonSensor-[0-9]\\.[0-9]\\.[0-9]-RELEASE")) | .browser_download_url')
-            SMCRADEONGPU_RELEASE_URL=$(curl -s "$RADEONSENSOR_URL" | jq -r '.assets[] | select(.name | match("SMCRadeonGPU-[0-9]\\.[0-9]\\.[0-9]-RELEASE")) | .browser_download_url')
-            RADEONSENSOR_RELEASE_NUMBER=$(curl -s "$RADEONSENSOR" | jq -r '.tag_name')
+            # Use GitHub token for authentication to fetch SMCRadeonSensors release
+            RADEONSENSOR_RELEASE_URL=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "$RADEONSENSOR_URL" | jq -r '.assets[] | select(.name | match("SMCRadeonSensors-[0-9]\\.[0-9]\\.[0-9]-RELEASE.zip")) | .browser_download_url')
+            RADEONSENSOR_RELEASE_NUMBER=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "$RADEONSENSOR_URL" | jq -r '.tag_name')
+
+            # Handle missing release URL
             if [ -z "$RADEONSENSOR_RELEASE_URL" ]; then
-                error "RadeonSensor release URL not found, is GitHub rate-limiting you?"
+                error "SMCRadeonSensors release URL not found, is GitHub rate-limiting you?"
                 exit 1
             fi
-            download_file "$RADEONSENSOR_RELEASE_URL" "$dir"/temp/RadeonSensor.zip
-            info "Downloaded RadeonSensor $RADEONSENSOR_RELEASE_NUMBER"
-            if [ -z "$SMCRADEONGPU_RELEASE_URL" ]; then
-                error "SMCRadeonGPU release URL not found, is GitHub rate-limiting you?"
-                exit 1
-            fi
-            download_file "$SMCRADEONGPU_RELEASE_URL" "$dir"/temp/SMCRadeonGPU.zip
-            info "Downloaded SMCRadeonGPU $RADEONSENSOR_RELEASE_NUMBER"
-            unzip -q "$dir"/temp/RadeonSensor.zip -d "$dir"/temp/RadeonSensor
-            unzip -q "$dir"/temp/SMCRadeonGPU.zip -d "$dir"/temp/SMCRadeonGPU
-            mv "$dir"/temp/RadeonSensor/RadeonSensor.kext "$efi"/Kexts/RadeonSensor.kext
-            mv "$dir"/temp/SMCRadeonGPU/SMCRadeonGPU.kext "$efi"/Kexts/SMCRadeonGPU.kext
+
+            # Download and extract SMCRadeonSensors
+            download_file "$RADEONSENSOR_RELEASE_URL" "$dir"/temp/SMCRadeonSensors.zip
+            info "Downloaded SMCRadeonSensors $RADEONSENSOR_RELEASE_NUMBER"
+            unzip -q "$dir"/temp/SMCRadeonSensors.zip -d "$dir"/temp/SMCRadeonSensors
+
+            # Move the RadeonSensor.kext to the appropriate location
+            mv "$dir"/temp/SMCRadeonSensors/RadeonSensor.kext "$efi"/Kexts/RadeonSensor.kext
         ;;
         n|N|No|NO|no )
             echo "" > /dev/null
@@ -477,11 +478,13 @@ atiradeonplugins() {
     esac
 }
 
+# If vsmcplugins is set to True, call atiradeonplugins
 case $vsmcplugins in
     True )
         atiradeonplugins
     ;;
 esac
+
 
 ethernet() {
     echo "################################################################"
